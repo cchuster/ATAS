@@ -164,10 +164,10 @@ ax1.set_ylabel("Pump-Probe Delay (fs)")
 ax1.set_xlabel("Energy (eV)")
 
 # %% Find the real component of the Fast Fourier Transform of the temporal SVD component
-tCross_fft = rfft(np.pad(tCross, (0, len(tCross)), 'constant'))
-tCo_fft = rfft(np.pad(tCo, (0, len(tCo)), 'constant'))
-freqCross = np.fft.rfftfreq(len(tCross)*2, 0.002*3.335668*2)
-freqCo = np.fft.rfftfreq(len(tCo)*2, 0.004*3.335668*2)
+tCross_fft = rfft(tCross)
+tCo_fft = rfft(tCo)
+freqCross = np.fft.rfftfreq(len(tCross), 0.004*3.335668*2)
+freqCo = np.fft.rfftfreq(len(tCo), 0.004*3.335668*2)
 # Plot the Fourier Transform
 plt.figure()
 plt.plot(freqCross, np.abs(tCross_fft), label='FT of Cross-Polarized SVD')
