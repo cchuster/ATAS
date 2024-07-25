@@ -60,7 +60,7 @@ pumpoff = np.array(pumpoff)[:, :, :]-bkg_off
 
 print("Dimensions of pumpon:", pumpon.shape)
 print("Dimensions of pumpoff:", pumpoff.shape)
-#%% Clean colinear absorption data
+#%% Clean copolarized absorption data
 # Find the average change in absorption for each of the time delays for each of the pixels across all pump-probe cycles
 AbsorptionCo = np.average(-(np.log(pumpon/pumpoff)), axis=0)
 AbsorptionCo[np.isnan(AbsorptionCo)] = 0
@@ -135,12 +135,6 @@ plt.plot(timeCross[:150], -subtracted_signal/np.max(-subtracted_signal), marker=
 plt.xlabel("Time Delay")
 plt.ylabel("Amplitude")
 plt.legend()
-
-# plt.figure()
-# plt.plot(sCross/np.max(sCross), marker='*', markersize=6, linestyle='--',label='Cross-Polarized')
-# plt.plot(-sCo/np.max(-sCo), marker='*', markersize=6, linestyle='--',label='Co-linear')
-# plt.legend()
-# plt.show()
 #%% Generate the transient absorption color plot of the sample with respect to energy
 # Calibrate the conversion between the pixels excited after grating and the energy level
 # Pixel position and energy are related non-linearly, so approximate to second order
@@ -170,10 +164,10 @@ ax1.set_ylabel("Pump-Probe Delay (fs)")
 ax1.set_xlabel("Energy (eV)")
 
 # %% Find the real component of the Fast Fourier Transform of the temporal SVD component
-tCross_fft = rfft(tCross)
-tCo_fft = rfft(tCo)
-freqCross = np.fft.rfftfreq(len(tCross), 0.002*3.335668*2)
-freqCo = np.fft.rfftfreq(len(tCo), 0.004*3.335668*2)
+tCross_fft = rfft(np.pad(tCross, (0, len(tCross)), 'constant'))
+tCo_fft = rfft(np.pad(tCo, (0, len(tCo)), 'constant'))
+freqCross = np.fft.rfftfreq(len(tCross)*2, 0.002*3.335668*2)
+freqCo = np.fft.rfftfreq(len(tCo)*2, 0.004*3.335668*2)
 # Plot the Fourier Transform
 plt.figure()
 plt.plot(freqCross, np.abs(tCross_fft), label='FT of Cross-Polarized SVD')
@@ -183,6 +177,77 @@ plt.ylim(0,10000)
 plt.xlabel('Frequency (THz)')
 plt.ylabel('Amplitude')
 plt.title('Fourier Transform of Temporal SVD')
+plt.legend()
+plt.show()
+# %% Alternating waveplate scans
+# Call the edge reference Matlab function
+def edge_reference(specOn, specOff, Edge):
+    oc = Oct2Py()
+    dOD_referenced = oc.edgeReferenceTransient(specOn, specOff, Edge)
+    return dOD_referenced
+
+path = '/home/cchuster/Summer 2024/Leone-Group/AltTe/'
+name = 'scan_Te_waveplate_altscan'
+
+# Store the background and pump-probe data for all cycles
+data = []
+for file in os.listdir(path):
+    if file.startswith(name):
+        f = (h5py.File(str(path)+file, 'r'))
+        data.append(f)
+
+# Background measurement taken only once, but stored in each pump-probe cycle for good practice
+bkg_on = np.average((data)[1]['data/bg0/on'][:, :], axis=0)
+bkg_off = np.average((data)[1]['data/bg0/off'][:, :], axis=0)
+
+pumpon = []
+pumpoff = []
+
+# Append the data from each of the 1340 pixels at each time delay for each pump-probe cycle 
+# Set zero for copolarized and one for cross polarized, then go back and run the above and then run the SVD below
+for i in range(len(data)-1):
+    pumpon.append(data[i]['data/res0/on'][:,1,:])
+    pumpoff.append(data[i]['data/res0/off'][:,1,:])
+
+# Subtract the on/off background noise for each pixel at each time delay for each pump-probe cycle
+pumpon = np.array(pumpon)[:, :, :]-bkg_on
+pumpoff = np.array(pumpoff)[:, :, :]-bkg_off
+
+print("Dimensions of pumpon:", pumpon.shape)
+print("Dimensions of pumpoff:", pumpoff.shape)
+# %% Perform Singular Value Decomposition on alternating waveplate scan
+def SVD_component(b, component):
+    b[np.isnan(b)] = 0
+    # Create the rotation, scale, rotation matrices
+    U, s, Vt = np.linalg.svd(b, full_matrices=False)
+    # Transpose the V matrix
+    V = Vt.T
+    # The "prevelance" value of the selected component
+    print(s[component])
+    # Reconstruct the original transient signal
+    signal = np.outer(U[:, component], V[:, component].T)*s[component]
+    # The temporal and spectral signals (weighted by the prevelance of the singal)
+    temporal_signal = U[:, component]*s[component]
+    spectral_signal = Vt[component, :] * s[component]
+    return signal, temporal_signal, spectral_signal
+
+qCross = AbsorptionCross[:,:]*1000
+qCo = AbsorptionCo[:,:]*1000
+
+timeCross = (np.arange(-44, 450, 4))*6.6
+timeCo = (np.arange(-44, 450, 4))*6.6
+
+sigCross, tCross, sCross = SVD_component(
+    qCross[:,350:550], 0)
+
+sigCo, tCo, sCo = SVD_component(
+    qCo[:,350:550], 0)
+
+plt.plot(timeCross, tCross/np.max(tCross), marker='o', markersize=6, linestyle='--',label='Cross-Polarized')
+plt.plot(timeCo, tCo/np.max(tCo), marker='o', markersize=6, linestyle='--',label='Co-Polarized')
+plt.legend()
+plt.xlabel("Time Delay")
+plt.ylabel("Amplitude")
 plt.legend()
 plt.show()
 # %%
